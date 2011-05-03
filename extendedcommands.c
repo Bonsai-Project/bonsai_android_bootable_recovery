@@ -483,12 +483,6 @@ int is_safe_to_format(const char* name)
             || strcmp(name, "/bootloader") == 0 || strcmp(name, "/recovery") == 0);
 }
 
-int is_safe_to_format(char* name)
-{
-    return !(strcmp(name, "/misc") == 0 || strcmp(name, "/radio") == 0
-            || strcmp(name, "/bootloader") == 0 || strcmp(name, "/recovery") == 0);
-}
-
 void show_partition_menu()
 {
     static const char* headers[] = {  "Mounts and Storage Menu",
