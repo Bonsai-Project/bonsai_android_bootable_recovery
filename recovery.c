@@ -59,10 +59,10 @@ static const char *COMMAND_FILE = "/cache/recovery/command";
 static const char *INTENT_FILE = "/cache/recovery/intent";
 static const char *LOG_FILE = "/cache/recovery/log";
 static const char *LAST_LOG_FILE = "/cache/recovery/last_log";
-static const char *SDCARD_ROOT = "/sdcard";
+static const char *SDCARD_ROOT = "/mnt/sdcard";
 static int allow_display_toggle = 1;
 static int poweroff = 0;
-static const char *SDCARD_PACKAGE_FILE = "/sdcard/update.zip";
+static const char *SDCARD_PACKAGE_FILE = "/mnt/sdcard/update.zip";
 static const char *TEMPORARY_LOG_FILE = "/tmp/recovery.log";
 static const char *SIDELOAD_TEMP_DIR = "/tmp/sideload";
 
@@ -148,8 +148,8 @@ static const int MAX_ARG_LENGTH = 4096;
 static const int MAX_ARGS = 100;
 
 // open a given path, mounting partitions as necessary
-static FILE*
-fopen_path(const char *path, const char *mode) {
+static FILE* fopen_path(const char *path, const char *mode)
+{
     if (ensure_path_mounted(path) != 0) {
         LOGE("Can't mount %s\n", path);
         return NULL;
@@ -165,8 +165,8 @@ fopen_path(const char *path, const char *mode) {
 }
 
 // close a file, log an error if the error indicator is set
-static void
-check_and_fclose(FILE *fp, const char *name) {
+static void check_and_fclose(FILE *fp, const char *name)
+{
     fflush(fp);
     if (ferror(fp)) LOGE("Error in %s\n(%s)\n", name, strerror(errno));
     fclose(fp);
@@ -176,8 +176,8 @@ check_and_fclose(FILE *fp, const char *name) {
 //   - the actual command line
 //   - the bootloader control block (one per line, after "recovery")
 //   - the contents of COMMAND_FILE (one per line)
-static void
-get_args(int *argc, char ***argv) {
+static void get_args(int *argc, char ***argv)
+{
     struct bootloader_message boot;
     memset(&boot, 0, sizeof(boot));
     if (device_flash_type() == MTD) {
@@ -244,8 +244,8 @@ get_args(int *argc, char ***argv) {
     }
 }
 
-void
-set_sdcard_update_bootloader_message() {
+void set_sdcard_update_bootloader_message()
+{
     struct bootloader_message boot;
     memset(&boot, 0, sizeof(boot));
     strlcpy(boot.command, "boot-recovery", sizeof(boot.command));
@@ -256,8 +256,8 @@ set_sdcard_update_bootloader_message() {
 // How much of the temp log we have copied to the copy in cache.
 static long tmplog_offset = 0;
 
-static void
-copy_log_file(const char* destination, int append) {
+static void copy_log_file(const char* destination, int append)
+{
     FILE *log = fopen_path(destination, append ? "a" : "w");
     if (log == NULL) {
         LOGE("Can't open %s\n", destination);
@@ -285,8 +285,8 @@ copy_log_file(const char* destination, int append) {
 // copy our log file to cache as well (for the system to read), and
 // record any intent we were asked to communicate back to the system.
 // this function is idempotent: call it as many times as you like.
-static void
-finish_recovery(const char *send_intent) {
+static void finish_recovery(const char *send_intent)
+{
     // By this point, we're ready to return to the main system...
     if (send_intent != NULL) {
         FILE *fp = fopen_path(INTENT_FILE, "w");
@@ -319,8 +319,8 @@ finish_recovery(const char *send_intent) {
     sync();  // For good measure.
 }
 
-static int
-erase_volume(const char *volume) {
+static int erase_volume(const char *volume)
+{
     ui_set_background(BACKGROUND_ICON_INSTALLING);
     ui_show_indeterminate_progress();
     ui_print("Formatting %s...\n", volume);
@@ -335,8 +335,8 @@ erase_volume(const char *volume) {
     return format_volume(volume);
 }
 
-static char*
-copy_sideloaded_package(const char* original_path) {
+static char* copy_sideloaded_package(const char* original_path)
+{
   if (ensure_path_mounted(original_path) != 0) {
     LOGE("Can't mount %s\n", original_path);
     return NULL;
@@ -425,31 +425,30 @@ copy_sideloaded_package(const char* original_path) {
   return strdup(copy_path);
 }
 
-static char**
-prepend_title(char** headers) {
-    char* title[] = { EXPAND(RECOVERY_VERSION),
+static const char** prepend_title(const char** headers)
+{
+    const char* title[] = { EXPAND(RECOVERY_VERSION),
                       "",
                       NULL };
 
     // count the number of lines in our title, plus the
     // caller-provided headers.
     int count = 0;
-    char** p;
+    const char** p;
     for (p = title; *p; ++p, ++count);
     for (p = headers; *p; ++p, ++count);
 
     char** new_headers = malloc((count+1) * sizeof(char*));
     char** h = new_headers;
-    for (p = title; *p; ++p, ++h) *h = *p;
-    for (p = headers; *p; ++p, ++h) *h = *p;
+    for (p = title; *p; ++p, ++h) *h = (char *)*p;
+    for (p = headers; *p; ++p, ++h) *h = (char *)*p;
     *h = NULL;
 
-    return new_headers;
+    return (const char **)new_headers;
 }
 
-int
-get_menu_selection(char** headers, char** items, int menu_only,
-                   int initial_selection) {
+int get_menu_selection(const char** headers, char** items, int menu_only, int initial_selection)
+{
     // throw away keys pressed previously, so user doesn't
     // accidentally trigger menu items.
     ui_clear_key_queue();
@@ -460,7 +459,7 @@ get_menu_selection(char** headers, char** items, int menu_only,
 
     // Some users with dead enter keys need a way to turn on power to select.
     // Jiggering across the wrapping menu is one "secret" way to enable it.
-    // We can't rely on /cache or /sdcard since they may not be available.
+    // We can't rely on /cache or /mnt/sdcard since they may not be available.
     int wrap_count = 0;
 
     while (chosen_item < 0 && chosen_item != GO_BACK) {
@@ -520,12 +519,13 @@ get_menu_selection(char** headers, char** items, int menu_only,
     return chosen_item;
 }
 
-static int compare_string(const void* a, const void* b) {
+static int compare_string(const void* a, const void* b)
+{
     return strcmp(*(const char**)a, *(const char**)b);
 }
 
-static int
-sdcard_directory(const char* path) {
+static int sdcard_directory(const char* path)
+{
     ensure_path_mounted(SDCARD_ROOT);
 
     const char* MENU_HEADERS[] = { "Choose a package to install:",
@@ -541,7 +541,7 @@ sdcard_directory(const char* path) {
         return 0;
     }
 
-    char** headers = prepend_title(MENU_HEADERS);
+    const char** headers = prepend_title(MENU_HEADERS);
 
     int d_size = 0;
     int d_alloc = 10;
@@ -645,10 +645,10 @@ sdcard_directory(const char* path) {
     return result;
 }
 
-static void
-wipe_data(int confirm) {
+static void wipe_data(int confirm)
+{
     if (confirm) {
-        static char** title_headers = NULL;
+        static const char** title_headers = NULL;
 
         if (title_headers == NULL) {
             char* headers[] = { "Confirm wipe of all user data?",
@@ -684,14 +684,13 @@ wipe_data(int confirm) {
     if (has_datadata()) {
         erase_volume("/datadata");
     }
-    erase_volume("/sd-ext");
-    erase_volume("/sdcard/.android_secure");
+    erase_volume("/mnt/sd-ext");
+    erase_volume("/mnt/sdcard/.android_secure");
     ui_print("Data wipe complete.\n");
 }
 
-static void
-prompt_and_wait() {
-    char** headers = prepend_title((const char**)MENU_HEADERS);
+static void prompt_and_wait() {
+    const char** headers = prepend_title((const char**)MENU_HEADERS);
 
     for (;;) {
         finish_recovery(NULL);
@@ -720,14 +719,17 @@ prompt_and_wait() {
                 if (confirm_selection("Confirm wipe?", "Yes - Wipe Cache"))
                 {
                     ui_print("\n-- Wiping cache...\n");
-                    erase_volume("/cache");
+                    if (erase_volume("/cache") != 0) {
+						ui_print("Cache wipe failed");
+						return;
+					}
                     ui_print("Cache wipe complete.\n");
                     if (!ui_text_visible()) return;
                 }
                 break;
 
             case ITEM_APPLY_SDCARD:
-                if (confirm_selection("Confirm install?", "Yes - Install /sdcard/update.zip"))
+                if (confirm_selection("Confirm install?", "Yes - Install /mnt/sdcard/update.zip"))
                 {
                     ui_print("\n-- Install from sdcard...\n");
                     int status = install_package(SDCARD_PACKAGE_FILE);
@@ -760,13 +762,12 @@ prompt_and_wait() {
     }
 }
 
-static void
-print_property(const char *key, const char *name, void *cookie) {
+static void print_property(const char *key, const char *name, void *cookie) {
     printf("%s=%s\n", key, name);
 }
 
-int
-main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
 	if (strstr(argv[0], "recovery") == NULL)
 	{
 	    if (strstr(argv[0], "flash_image") != NULL)

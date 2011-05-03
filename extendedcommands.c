@@ -16,6 +16,7 @@
 #include <sys/limits.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <libgen.h>
 
 #include <signal.h>
 #include <sys/wait.h>
@@ -38,10 +39,11 @@
 #include "mounts.h"
 #include "flashutils/flashutils.h"
 #include "edify/expr.h"
+#include "mmcutils/mmcutils.h"
 
 int signature_check_enabled = 1;
 int script_assert_enabled = 1;
-static const char *SDCARD_UPDATE_FILE = "/sdcard/update.zip";
+static const char *SDCARD_UPDATE_FILE = "/mnt/sdcard/update.zip";
 
 void
 toggle_signature_check()
@@ -74,19 +76,15 @@ int install_zip(const char* packagefilepath)
     return 0;
 }
 
-char* INSTALL_MENU_ITEMS[] = {  "apply /sdcard/update.zip",
+char* INSTALL_MENU_ITEMS[] = {  "apply /mnt/sdcard/update.zip",
                                 "choose zip from sdcard",
                                 "toggle signature verification",
                                 "toggle script asserts",
                                 NULL };
-#define ITEM_APPLY_SDCARD     0
-#define ITEM_CHOOSE_ZIP       1
-#define ITEM_SIG_CHECK        2
-#define ITEM_ASSERTS          3
 
 void show_install_update_menu()
 {
-    static char* headers[] = {  "Apply update from .zip file on SD card",
+    static const char* headers[] = {  "Apply update from .zip file on SD card",
                                 "",
                                 NULL
     };
@@ -95,19 +93,19 @@ void show_install_update_menu()
         int chosen_item = get_menu_selection(headers, INSTALL_MENU_ITEMS, 0, 0);
         switch (chosen_item)
         {
-            case ITEM_ASSERTS:
+            case 3:	/* ITEM_ASSERTS */
                 toggle_script_asserts();
                 break;
-            case ITEM_SIG_CHECK:
+            case 2:	/* ITEM_SIG_CHECK */
                 toggle_signature_check();
                 break;
-            case ITEM_APPLY_SDCARD:
+            case 0:	/* ITEM_APPLY_SDCARD */
             {
-                if (confirm_selection("Confirm install?", "Yes - Install /sdcard/update.zip"))
+                if (confirm_selection("Confirm install?", "Yes - Install /mnt/sdcard/update.zip"))
                     install_zip(SDCARD_UPDATE_FILE);
                 break;
             }
-            case ITEM_CHOOSE_ZIP:
+            case 1:	/* ITEM_CHOOSE_ZIP */
                 show_choose_zip_menu();
                 break;
             default:
@@ -149,7 +147,7 @@ char** gather_files(const char* directory, const char* fileExtensionOrDirectory,
         return NULL;
     }
 
-    int extension_length = 0;
+    size_t extension_length = 0;
     if (fileExtensionOrDirectory != NULL)
         extension_length = strlen(fileExtensionOrDirectory);
 
@@ -300,17 +298,17 @@ char* choose_file_menu(const char* directory, const char* fileExtensionOrDirecto
 
 void show_choose_zip_menu()
 {
-    if (ensure_path_mounted("/sdcard") != 0) {
-        LOGE ("Can't mount /sdcard\n");
+    if (ensure_path_mounted("/mnt/sdcard") != 0) {
+        LOGE ("Can't mount /mnt/sdcard\n");
         return;
     }
 
-    static char* headers[] = {  "Choose a zip to apply",
+    static const char* headers[] = {  "Choose a zip to apply",
                                 "",
                                 NULL
     };
 
-    char* file = choose_file_menu("/sdcard/", ".zip", headers);
+    char* file = choose_file_menu("/mnt/sdcard/", ".zip", headers);
     if (file == NULL)
         return;
     static char* confirm_install  = "Confirm install?";
@@ -322,17 +320,17 @@ void show_choose_zip_menu()
 
 void show_nandroid_restore_menu()
 {
-    if (ensure_path_mounted("/sdcard") != 0) {
-        LOGE ("Can't mount /sdcard\n");
+    if (ensure_path_mounted("/mnt/sdcard") != 0) {
+        LOGE ("Can't mount /mnt/sdcard\n");
         return;
     }
 
-    static char* headers[] = {  "Choose an image to restore",
+    static const char* headers[] = {  "Choose an image to restore",
                                 "",
                                 NULL
     };
 
-    char* file = choose_file_menu("/sdcard/clockworkmod/backup/", NULL, headers);
+    char* file = choose_file_menu("/mnt/sdcard/clockworkmod/backup/", NULL, headers);
     if (file == NULL)
         return;
 
@@ -344,10 +342,10 @@ void show_nandroid_restore_menu()
 #define BOARD_UMS_LUNFILE	"/sys/devices/platform/usb_mass_storage/lun0/file"
 #endif
 
-void show_mount_usb_storage_menu()
+int show_mount_usb_storage_menu()
 {
     int fd;
-    Volume *vol = volume_for_path("/sdcard");
+    Volume *vol = volume_for_path("/mnt/sdcard");
     if ((fd = open(BOARD_UMS_LUNFILE, O_WRONLY)) < 0) {
         LOGE("Unable to open ums lunfile (%s)", strerror(errno));
         return -1;
@@ -358,7 +356,7 @@ void show_mount_usb_storage_menu()
         close(fd);
         return -1;
     }
-    static char* headers[] = {  "USB Mass Storage device",
+    static const char* headers[] = {  "USB Mass Storage device",
                                 "Leaving this menu unmount",
                                 "your SD card from your PC.",
                                 "",
@@ -385,15 +383,17 @@ void show_mount_usb_storage_menu()
         close(fd);
         return -1;
     }
+
+	return 0;
 }
 
 int confirm_selection(const char* title, const char* confirm)
 {
     struct stat info;
-    if (0 == stat("/sdcard/clockworkmod/.no_confirm", &info))
+    if (0 == stat("/mnt/sdcard/clockworkmod/.no_confirm", &info))
         return 1;
 
-    char* confirm_headers[]  = {  title, "  THIS CAN NOT BE UNDONE.", "", NULL };
+    const char* confirm_headers[]  = {  title, "  THIS CAN NOT BE UNDONE.", "", NULL };
     char* items[] = { "No",
                       "No",
                       "No",
@@ -401,7 +401,7 @@ int confirm_selection(const char* title, const char* confirm)
                       "No",
                       "No",
                       "No",
-                      confirm, //" Yes -- wipe partition",   // [7
+                      "Confirm",
                       "No",
                       "No",
                       "No",
@@ -424,13 +424,13 @@ int format_unknown_device(const char *device, const char* path, const char *fs_t
         return erase_raw_partition(device);
 
     // if this is SDEXT:, don't worry about it if it does not exist.
-    if (0 == strcmp(path, "/sd-ext"))
+    if (0 == strcmp(path, "/mnt/sd-ext"))
     {
         struct stat st;
-        Volume *vol = volume_for_path("/sd-ext");
+        Volume *vol = volume_for_path("/mnt/sd-ext");
         if (vol == NULL || 0 != stat(vol->device, &st))
         {
-            ui_print("No app2sd partition found. Skipping format of /sd-ext.\n");
+            ui_print("No app2sd partition found. Skipping format of /mnt/sd-ext.\n");
             return 0;
         }
     }
@@ -476,20 +476,15 @@ int format_unknown_device(const char *device, const char* path, const char *fs_t
 //#define DEVICE_COUNT 4
 //#define MMC_COUNT 2
 
-typedef struct {
-    char mount[255];
-    char unmount[255];
-    Volume* v;
-} MountMenuEntry;
-
-typedef struct {
-    char txt[255];
-    Volume* v;
-} FormatMenuEntry;
+int is_safe_to_format(const char* name)
+{
+    return !(strcmp(name, "/misc") == 0 || strcmp(name, "/radio") == 0
+            || strcmp(name, "/bootloader") == 0 || strcmp(name, "/recovery") == 0);
+}
 
 void show_partition_menu()
 {
-    static char* headers[] = {  "Mounts and Storage Menu",
+    static const char* headers[] = {  "Mounts and Storage Menu",
                                 "",
                                 NULL
     };
@@ -511,35 +506,36 @@ void show_partition_menu()
     if(!device_volumes)
 		return;
 
-		mountable_volumes = 0;
-		formatable_volumes = 0;
+	mountable_volumes = 0;
+	formatable_volumes = 0;
 
-		mount_menue = malloc(num_volumes * sizeof(MountMenuEntry));
-		format_menue = malloc(num_volumes * sizeof(FormatMenuEntry));
+	mount_menue = malloc(num_volumes * sizeof(MountMenuEntry));
+	format_menue = malloc(num_volumes * sizeof(FormatMenuEntry));
 
-		for (i = 0; i < num_volumes; ++i) {
-			Volume* v = &device_volumes[i];
-			if(strcmp("ramdisk", v->fs_type) != 0 && strcmp("mtd", v->fs_type) != 0 && strcmp("emmc", v->fs_type) != 0 && strcmp("bml", v->fs_type) != 0)
-			{
-				sprintf(&mount_menue[mountable_volumes].mount, "mount %s", v->mount_point);
-				sprintf(&mount_menue[mountable_volumes].unmount, "unmount %s", v->mount_point);
-				mount_menue[mountable_volumes].v = &device_volumes[i];
-				++mountable_volumes;
-				sprintf(&format_menue[formatable_volumes].txt, "format %s", v->mount_point);
-				format_menue[formatable_volumes].v = &device_volumes[i];
-				++formatable_volumes;
-		    }
-		    else if (strcmp("ramdisk", v->fs_type) != 0 && strcmp("misc", v->mount_point) != 0 && strcmp("mtd", v->fs_type) == 0)
-		    {
-				sprintf(&format_menue[formatable_volumes].txt, "format %s", v->mount_point);
+	for (i = 0; i < num_volumes; ++i) {
+		Volume* v = &device_volumes[i];
+		if(strcmp("ramdisk", v->fs_type) != 0 && strcmp("mtd", v->fs_type) != 0 && strcmp("emmc", v->fs_type) != 0 && strcmp("bml", v->fs_type) != 0) 
+		{
+			sprintf(mount_menue[mountable_volumes].mount, "mount %s", v->mount_point);
+			sprintf(mount_menue[mountable_volumes].unmount, "unmount %s", v->mount_point);
+			mount_menue[mountable_volumes].v = &device_volumes[i];
+			++mountable_volumes;
+			if (is_safe_to_format(v->mount_point)) {
+				sprintf(format_menue[formatable_volumes].txt, "format %s", v->mount_point);
 				format_menue[formatable_volumes].v = &device_volumes[i];
 				++formatable_volumes;
 			}
 		}
+		else if (strcmp("ramdisk", v->fs_type) != 0 && strcmp("mtd", v->fs_type) == 0 && is_safe_to_format(v->mount_point))
+		{
+			sprintf(format_menue[formatable_volumes].txt, "format %s", v->mount_point);
+			format_menue[formatable_volumes].v = &device_volumes[i];
+			++formatable_volumes;
+		}
+	}
 
-
-    static char* confirm_format  = "Confirm format?";
-    static char* confirm = "Yes - Format";
+	static char* confirm_format  = "Confirm format?";
+	static char* confirm = "Yes - Format";
 
     for (;;)
     {
@@ -564,7 +560,7 @@ void show_partition_menu()
         options[mountable_volumes+formatable_volumes] = "mount USB storage";
         options[mountable_volumes+formatable_volumes + 1] = NULL;
 
-        int chosen_item = get_menu_selection(headers, &options, 0, 0);
+        int chosen_item = get_menu_selection(headers, options, 0, 0);
         if (chosen_item == GO_BACK)
             break;
         if (chosen_item == (mountable_volumes+formatable_volumes))
@@ -696,13 +692,13 @@ int run_and_remove_extendedcommand()
     int i = 0;
     for (i = 20; i > 0; i--) {
         ui_print("Waiting for SD Card to mount (%ds)\n", i);
-        if (ensure_path_mounted("/sdcard") == 0) {
+        if (ensure_path_mounted("/mnt/sdcard") == 0) {
             ui_print("SD Card mounted...\n");
             break;
         }
         sleep(1);
     }
-    remove("/sdcard/clockworkmod/.recoverycheckpoint");
+    remove("/mnt/sdcard/clockworkmod/.recoverycheckpoint");
     if (i == 0) {
         ui_print("Timed out waiting for SD card... continuing anyways.");
     }
@@ -713,12 +709,12 @@ int run_and_remove_extendedcommand()
 
 void show_nandroid_advanced_restore_menu()
 {
-    if (ensure_path_mounted("/sdcard") != 0) {
-        LOGE ("Can't mount /sdcard\n");
+    if (ensure_path_mounted("/mnt/sdcard") != 0) {
+        LOGE ("Can't mount /mnt/sdcard\n");
         return;
     }
 
-    static char* advancedheaders[] = {  "Choose an image to restore",
+    static const char* advancedheaders[] = {  "Choose an image to restore",
                                 "",
                                 "Choose an image to restore",
                                 "first. The next menu will",
@@ -727,11 +723,11 @@ void show_nandroid_advanced_restore_menu()
                                 NULL
     };
 
-    char* file = choose_file_menu("/sdcard/clockworkmod/backup/", NULL, advancedheaders);
+    char* file = choose_file_menu("/mnt/sdcard/clockworkmod/backup/", NULL, advancedheaders);
     if (file == NULL)
         return;
 
-    static char* headers[] = {  "Nandroid Advanced Restore",
+    static const char* headers[] = {  "Nandroid Advanced Restore",
                                 "",
                                 NULL
     };
@@ -785,7 +781,7 @@ void show_nandroid_advanced_restore_menu()
 
 void show_nandroid_menu()
 {
-    static char* headers[] = {  "Nandroid",
+    static const char* headers[] = {  "Nandroid",
                                 "",
                                 NULL
     };
@@ -808,11 +804,11 @@ void show_nandroid_menu()
                 {
                     struct timeval tp;
                     gettimeofday(&tp, NULL);
-                    sprintf(backup_path, "/sdcard/clockworkmod/backup/%d", tp.tv_sec);
+                    sprintf(backup_path, "/mnt/sdcard/clockworkmod/backup/%d", (int)tp.tv_sec);
                 }
                 else
                 {
-                    strftime(backup_path, sizeof(backup_path), "/sdcard/clockworkmod/backup/%F.%H.%M.%S", tmp);
+                    strftime(backup_path, sizeof(backup_path), "/mnt/sdcard/clockworkmod/backup/%F.%H.%M.%S", tmp);
                 }
                 nandroid_backup(backup_path);
             }
@@ -835,7 +831,7 @@ void wipe_battery_stats()
 
 void show_advanced_menu()
 {
-    static char* headers[] = {  "Advanced and Debugging Menu",
+    static const char* headers[] = {  "Advanced and Debugging Menu",
                                 "",
                                 NULL
     };
@@ -869,12 +865,16 @@ void show_advanced_menu()
             {
                 if (0 != ensure_path_mounted("/data"))
                     break;
-                ensure_path_mounted("/sd-ext");
+#if defined(SD_EXT)
+                ensure_path_mounted("/mnt/sd-ext");
+#endif
                 ensure_path_mounted("/cache");
                 if (confirm_selection( "Confirm wipe?", "Yes - Wipe Dalvik Cache")) {
-                    __system("rm -r /data/dalvik-cache");
-                    __system("rm -r /cache/dalvik-cache");
-                    __system("rm -r /sd-ext/dalvik-cache");
+                    __system("rm -fr /data/dalvik-cache");
+                    __system("rm -fr /cache/dalvik-cache");
+#if defined(SD_EXT)
+                    __system("rm -fr /mnt/sd-ext/dalvik-cache");
+#endif
                 }
                 ensure_path_unmounted("/data");
                 ui_print("Dalvik Cache wiped.\n");
@@ -921,8 +921,8 @@ void show_advanced_menu()
                                               "256M",
                                               NULL };
 
-                static char* ext_headers[] = { "Ext Size", "", NULL };
-                static char* swap_headers[] = { "Swap Size", "", NULL };
+                static const char* ext_headers[] = { "Ext Size", "", NULL };
+                static const char* swap_headers[] = { "Swap Size", "", NULL };
 
                 int ext_size = get_menu_selection(ext_headers, ext_sizes, 0, 0);
                 if (ext_size == GO_BACK)
@@ -933,13 +933,13 @@ void show_advanced_menu()
                     continue;
 
                 char sddevice[256];
-                Volume *vol = volume_for_path("/sdcard");
+                Volume *vol = volume_for_path("/mnt/sdcard");
                 strcpy(sddevice, vol->device);
                 // we only want the mmcblk, not the partition
-                sddevice[strlen("/dev/block/mmcblkX")] = NULL;
+                sddevice[strlen("/dev/block/mmcblkX")] = '\0';
                 char cmd[PATH_MAX];
                 setenv("SDPATH", sddevice, 1);
-                sprintf(cmd, "sdparted -es %s -ss %s -efs ext3 -s", ext_sizes[ext_size], swap_sizes[swap_size]);
+                sprintf(cmd, "/sbin/sdparted -es %s -ss %s -efs ext3 -s", ext_sizes[ext_size], swap_sizes[swap_size]);
                 ui_print("Partitioning SD Card... please wait...\n");
                 if (0 == __system(cmd))
                     ui_print("Done!\n");
@@ -952,7 +952,7 @@ void show_advanced_menu()
                 ensure_path_mounted("/system");
                 ensure_path_mounted("/data");
                 ui_print("Fixing permissions...\n");
-                __system("fix_permissions");
+                __system("/sbin/fix_permissions");
                 ui_print("Done!\n");
                 break;
             }
@@ -973,7 +973,7 @@ void show_advanced_menu()
                                               "256M",
                                               NULL };
 
-                static char* ext_headers[] = { "Data Size", "", NULL };
+                static const char* ext_headers[] = { "Data Size", "", NULL };
                 static char* swap_headers[] = { "Swap Size", "", NULL };
 
                 int ext_size = get_menu_selection(ext_headers, ext_sizes, 0, 0);
@@ -988,10 +988,10 @@ void show_advanced_menu()
                 Volume *vol = volume_for_path("/emmc");
                 strcpy(sddevice, vol->device);
                 // we only want the mmcblk, not the partition
-                sddevice[strlen("/dev/block/mmcblkX")] = NULL;
+                sddevice[strlen("/dev/block/mmcblkX")] = '\0';
                 char cmd[PATH_MAX];
                 setenv("SDPATH", sddevice, 1);
-                sprintf(cmd, "sdparted -es %s -ss %s -efs ext3 -s", ext_sizes[ext_size], swap_sizes[swap_size]);
+                sprintf(cmd, "/sbin/sdparted -es %s -ss %s -efs ext3 -s", ext_sizes[ext_size], swap_sizes[swap_size]);
                 ui_print("Partitioning Internal SD Card... please wait...\n");
                 if (0 == __system(cmd))
                     ui_print("Done!\n");
@@ -1041,8 +1041,8 @@ void create_fstab()
         write_fstab_root("/datadata", file);
     }
     write_fstab_root("/system", file);
-    write_fstab_root("/sdcard", file);
-    write_fstab_root("/sd-ext", file);
+    write_fstab_root("/mnt/sdcard", file);
+    write_fstab_root("/mnt/sd-ext", file);
     fclose(file);
     LOGI("Completed outputting fstab.\n");
 }
@@ -1096,8 +1096,8 @@ void process_volumes() {
     char backup_name[PATH_MAX];
     struct timeval tp;
     gettimeofday(&tp, NULL);
-    sprintf(backup_name, "before-ext4-convert-%d", tp.tv_sec);
-    sprintf(backup_path, "/sdcard/clockworkmod/backup/%s", backup_name);
+    sprintf(backup_name, "before-ext4-convert-%d", (int)tp.tv_sec);
+    sprintf(backup_path, "/mnt/sdcard/clockworkmod/backup/%s", backup_name);
 
     ui_set_show_text(1);
     ui_print("Filesystems need to be converted to ext4.\n");
@@ -1115,11 +1115,11 @@ void handle_failure(int ret)
 {
     if (ret == 0)
         return;
-    if (0 != ensure_path_mounted("/sdcard"))
+    if (0 != ensure_path_mounted("/mnt/sdcard"))
         return;
-    mkdir("/sdcard/clockworkmod", S_IRWXU);
-    __system("cp /tmp/recovery.log /sdcard/clockworkmod/recovery.log");
-    ui_print("/tmp/recovery.log was copied to /sdcard/clockworkmod/recovery.log. Please open ROM Manager to report the issue.\n");
+    mkdir("/mnt/sdcard/clockworkmod", S_IRWXU);
+    __system("cp /tmp/recovery.log /mnt/sdcard/clockworkmod/recovery.log");
+    ui_print("/tmp/recovery.log was copied to /mnt/sdcard/clockworkmod/recovery.log. Please open ROM Manager to report the issue.\n");
 }
 
 int is_path_mounted(const char* path) {

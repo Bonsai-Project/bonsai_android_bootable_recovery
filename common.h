@@ -40,7 +40,7 @@ void ui_set_show_text(int value);
 // Display some header text followed by a menu of items, which appears
 // at the top of the screen (in place of any scrolling ui_print()
 // output, if necessary).
-int ui_start_menu(char** headers, char** items, int initial_selection);
+int ui_start_menu(const char** headers, char** items, int initial_selection);
 // Set the menu highlight to the given index, and return it (capped to
 // the range [0..numitems).
 int ui_menu_select(int sel);
@@ -103,19 +103,14 @@ void ui_reset_progress();
 
 typedef struct {
     const char* mount_point;  // eg. "/cache".  must live in the root directory.
-
     const char* fs_type;      // "yaffs2" or "ext4" or "vfat"
-
     const char* device;       // MTD partition name if fs_type == "yaffs"
                               // block device if fs_type == "ext4" or "vfat"
-
     const char* device2;      // alternative device to try if fs_type
                               // == "ext4" or "vfat" and mounting
                               // 'device' fails
     const char* fs_type2;
-
     const char* fs_options;
-
     const char* fs_options2;
 } Volume;
 
