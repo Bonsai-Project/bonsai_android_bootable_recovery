@@ -31,7 +31,8 @@
 // Return VERIFY_SUCCESS, VERIFY_FAILURE (if any error is encountered
 // or no key matches the signature).
 
-int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKeys) {
+int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKeys)
+{
     ui_set_progress(0.0);
 
     FILE* f = fopen(path, "rb");
@@ -120,7 +121,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
         return VERIFY_FAILURE;
     }
 
-    int i;
+    size_t i;
     for (i = 4; i < eocd_size-3; ++i) {
         if (eocd[i  ] == 0x50 && eocd[i+1] == 0x4b &&
             eocd[i+2] == 0x05 && eocd[i+3] == 0x06) {
@@ -149,7 +150,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
     size_t so_far = 0;
     fseek(f, 0, SEEK_SET);
     while (so_far < signed_len) {
-        int size = BUFFER_SIZE;
+        size_t size = BUFFER_SIZE;
         if (signed_len - so_far < size) size = signed_len - so_far;
         if (fread(buffer, 1, size, f) != size) {
             LOGE("failed to read data from %s (%s)\n", path, strerror(errno));
@@ -158,10 +159,10 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
         }
         SHA_update(&ctx, buffer, size);
         so_far += size;
-        double f = so_far / (double)signed_len;
-        if (f > frac + 0.02 || size == so_far) {
-            ui_set_progress(f);
-            frac = f;
+        double far = so_far / (double)signed_len;
+        if (far > frac + 0.02 || size == so_far) {
+            ui_set_progress(far);
+            frac = far;
         }
     }
     fclose(f);

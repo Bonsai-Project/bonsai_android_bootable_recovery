@@ -27,6 +27,8 @@
 #include "roots.h"
 #include "common.h"
 #include "make_ext4fs.h"
+#include "extendedcommands.h"
+#include "flashutils/flashutils.h"
 
 int num_volumes;
 Volume* device_volumes;
@@ -251,7 +253,8 @@ int ensure_path_unmounted(const char* path) {
     return unmount_mounted_volume(mv);
 }
 
-int format_volume(const char* volume) {
+int format_volume(const char* volume)
+{
     Volume* v = volume_for_path(volume);
     if (v == NULL) {
         // silent failure for sd-ext

@@ -82,10 +82,8 @@ extern char* MENU_HEADERS[];
 // Text of menu items.
 extern char* MENU_ITEMS[];
 
-int
-get_menu_selection(char** headers, char** items, int menu_only, int initial_selection);
+int get_menu_selection(const char** headers, char** items, int menu_only, int initial_selection);
 
-void
-set_sdcard_update_bootloader_message();
+void set_sdcard_update_bootloader_message();
 
 #endif
