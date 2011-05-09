@@ -831,7 +831,7 @@ int main(int argc, char **argv)
         case 'e': encrypted_fs_mode = optarg; toggle_secure_fs = 1; break;
         case 't': ui_show_text(1); break;
         case '?':
-            LOGE("main: invalid command argument: -%s\n", arg);
+            LOGE("main: invalid command argument: -%s\n", optarg);
             continue;
         }
     }
