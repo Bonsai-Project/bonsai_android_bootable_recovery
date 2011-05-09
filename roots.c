@@ -70,7 +70,7 @@ void load_volume_table() {
 
     FILE* fstab = fopen("/etc/recovery.fstab", "r");
     if (fstab == NULL) {
-        LOGE("failed to open /etc/recovery.fstab (%s)\n", strerror(errno));
+        LOGE("load_volume_table: failed to open /etc/recovery.fstab (%s)\n", strerror(errno));
         return;
     }
 
@@ -114,7 +114,7 @@ void load_volume_table() {
             }
             ++num_volumes;
         } else {
-            LOGE("skipping malformed recovery.fstab line: %s\n", original);
+            LOGE("load_volume_table: skipping malformed recovery.fstab line: %s\n", original);
         }
         free(original);
     }
@@ -166,7 +166,7 @@ int try_mount(const char* device, const char* mount_point, const char* fs_type, 
 int ensure_path_mounted(const char* path) {
     Volume* v = volume_for_path(path);
     if (v == NULL) {
-        LOGE("unknown volume for path [%s]\n", path);
+        LOGE("ensure_path_mounted: unknown volume for path: \"%s\"\n", path);
         return -1;
     }
     if (strcmp(v->fs_type, "ramdisk") == 0) {
@@ -177,7 +177,7 @@ int ensure_path_mounted(const char* path) {
     int result;
     result = scan_mounted_volumes();
     if (result < 0) {
-        LOGE("failed to scan mounted volumes\n");
+        LOGE("ensure_path_mounted: failed to scan mounted volumes\n");
         return -1;
     }
 
@@ -196,7 +196,7 @@ int ensure_path_mounted(const char* path) {
         const MtdPartition* partition;
         partition = mtd_find_partition_by_name(v->device);
         if (partition == NULL) {
-            LOGE("failed to find \"%s\" partition to mount at \"%s\"\n",
+            LOGE("ensure_path_mounted: failed to find \"%s\" partition to mount on \"%s\"\n",
                  v->device, v->mount_point);
             return -1;
         }
@@ -221,14 +221,15 @@ int ensure_path_mounted(const char* path) {
         return __system(mount_cmd);
     }
 
-    LOGE("unknown fs_type \"%s\" for %s\n", v->fs_type, v->mount_point);
+    LOGE("ensure_path_mounted: unknown fs_type \"%s\" for \"%s\"\n",
+		 v->fs_type, v->mount_point);
     return -1;
 }
 
 int ensure_path_unmounted(const char* path) {
     Volume* v = volume_for_path(path);
     if (v == NULL) {
-        LOGE("unknown volume for path [%s]\n", path);
+        LOGE("ensure_path_unmounted: unknown volume for path: \"%s\"\n", path);
         return -1;
     }
     if (strcmp(v->fs_type, "ramdisk") == 0) {
@@ -239,7 +240,7 @@ int ensure_path_unmounted(const char* path) {
     int result;
     result = scan_mounted_volumes();
     if (result < 0) {
-        LOGE("failed to scan mounted volumes\n");
+        LOGE("ensure_path_unmounted: failed to scan mounted volumes\n");
         return -1;
     }
 
@@ -260,12 +261,12 @@ int format_volume(const char* volume)
         // silent failure for sd-ext
         if (strcmp(volume, "/sd-ext") == 0)
             return -1;
-        LOGE("unknown volume \"%s\"\n", volume);
+        LOGE("format_volume: unknown volume: \"%s\"\n", volume);
         return -1;
     }
     if (strcmp(v->fs_type, "ramdisk") == 0) {
         // you can't format the ramdisk.
-        LOGE("can't format_volume \"%s\"", volume);
+        LOGE("format_volume: failed to format volume: \"%s\"", volume);
         return -1;
     }
     if (strcmp(v->mount_point, volume) != 0) {
@@ -277,7 +278,7 @@ int format_volume(const char* volume)
     }
 
     if (ensure_path_unmounted(volume) != 0) {
-        LOGE("format_volume failed to unmount \"%s\"\n", v->mount_point);
+        LOGE("format_volume: failed to unmount: \"%s\"\n", v->mount_point);
         return -1;
     }
 
@@ -285,7 +286,7 @@ int format_volume(const char* volume)
         mtd_scan_partitions();
         const MtdPartition* partition = mtd_find_partition_by_name(v->device);
         if (partition == NULL) {
-            LOGE("format_volume: no MTD partition \"%s\"\n", v->device);
+            LOGE("format_volume: no MTD partition: \"%s\"\n", v->device);
             return -1;
         }
 
@@ -312,7 +313,7 @@ int format_volume(const char* volume)
         reset_ext4fs_info();
         int result = make_ext4fs(v->device, NULL, NULL, 0, 0, 0);
         if (result != 0) {
-            LOGE("format_volume: make_extf4fs failed on %s\n", v->device);
+            LOGE("format_volume: make_extf4fs failed: \"%s\"\n", v->device);
             return -1;
         }
         return 0;

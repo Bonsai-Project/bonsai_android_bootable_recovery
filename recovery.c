@@ -151,7 +151,7 @@ static const int MAX_ARGS = 100;
 static FILE* fopen_path(const char *path, const char *mode)
 {
     if (ensure_path_mounted(path) != 0) {
-        LOGE("Can't mount %s\n", path);
+        LOGE("fopen_path: failed to mount: \"%s\"\n", path);
         return NULL;
     }
 
@@ -160,7 +160,7 @@ static FILE* fopen_path(const char *path, const char *mode)
     if (strchr("wa", mode[0])) dirCreateHierarchy(path, 0777, NULL, 1);
 
     FILE *fp = fopen(path, mode);
-    if (fp == NULL && path != COMMAND_FILE) LOGE("Can't open %s\n", path);
+    if (fp == NULL && path != COMMAND_FILE) LOGE("fopen_path: failed to open: \"%s\"\n", path);
     return fp;
 }
 
@@ -168,7 +168,7 @@ static FILE* fopen_path(const char *path, const char *mode)
 static void check_and_fclose(FILE *fp, const char *name)
 {
     fflush(fp);
-    if (ferror(fp)) LOGE("Error in %s\n(%s)\n", name, strerror(errno));
+    if (ferror(fp)) LOGE("check_and_fclose: error in: \"%s\"\n(%s)\n", name, strerror(errno));
     fclose(fp);
 }
 
@@ -185,11 +185,11 @@ static void get_args(int *argc, char ***argv)
     }
 
     if (boot.command[0] != 0 && boot.command[0] != 255) {
-        LOGI("Boot command: %.*s\n", sizeof(boot.command), boot.command);
+        LOGI("get_args: boot command: %.*s\n", sizeof(boot.command), boot.command);
     }
 
     if (boot.status[0] != 0 && boot.status[0] != 255) {
-        LOGI("Boot status: %.*s\n", sizeof(boot.status), boot.status);
+        LOGI("get_args: boot status: %.*s\n", sizeof(boot.status), boot.status);
     }
 
     struct stat file_info;
@@ -205,9 +205,9 @@ static void get_args(int *argc, char ***argv)
                 if ((arg = strtok(NULL, "\n")) == NULL) break;
                 (*argv)[*argc] = strdup(arg);
             }
-            LOGI("Got arguments from boot message\n");
+            LOGI("get_args: bootmessage arguments: \"%.20s\"\n", arg);
         } else if (boot.recovery[0] != 0 && boot.recovery[0] != 255) {
-            LOGE("Bad boot message\n\"%.20s\"\n", boot.recovery);
+            LOGE("get_args: bad bootmessage: \"%.20s\"\n", boot.recovery);
         }
     }
 
@@ -226,7 +226,7 @@ static void get_args(int *argc, char ***argv)
             }
 
             check_and_fclose(fp, COMMAND_FILE);
-            LOGI("Got arguments from %s\n", COMMAND_FILE);
+            LOGI("get_args: arguments taken from: \"%s\"\n", COMMAND_FILE);
         }
     }
 
@@ -260,11 +260,11 @@ static void copy_log_file(const char* destination, int append)
 {
     FILE *log = fopen_path(destination, append ? "a" : "w");
     if (log == NULL) {
-        LOGE("Can't open %s\n", destination);
+        LOGE("copy_log_file: failed to open: \"%s\"\n", destination);
     } else {
         FILE *tmplog = fopen(TEMPORARY_LOG_FILE, "r");
         if (tmplog == NULL) {
-            LOGE("Can't open %s\n", TEMPORARY_LOG_FILE);
+            LOGE("copy_log_file: failed to open: \"%s\"\n", TEMPORARY_LOG_FILE);
         } else {
             if (append) {
                 fseek(tmplog, tmplog_offset, SEEK_SET);  // Since last write
@@ -291,7 +291,7 @@ static void finish_recovery(const char *send_intent)
     if (send_intent != NULL) {
         FILE *fp = fopen_path(INTENT_FILE, "w");
         if (fp == NULL) {
-            LOGE("Can't open %s\n", INTENT_FILE);
+            LOGE("finish_recovery: failed to open: \"%s\"\n", INTENT_FILE);
         } else {
             fputs(send_intent, fp);
             check_and_fclose(fp, INTENT_FILE);
@@ -338,18 +338,18 @@ static int erase_volume(const char *volume)
 static char* copy_sideloaded_package(const char* original_path)
 {
   if (ensure_path_mounted(original_path) != 0) {
-    LOGE("Can't mount %s\n", original_path);
+    LOGE("copy_sideloaded_package: failed to mount: \"%s\"\n", original_path);
     return NULL;
   }
 
   if (ensure_path_mounted(SIDELOAD_TEMP_DIR) != 0) {
-    LOGE("Can't mount %s\n", SIDELOAD_TEMP_DIR);
+    LOGE("copy_sideloaded_package: failed to mount: \"%s\"\n", SIDELOAD_TEMP_DIR);
     return NULL;
   }
 
   if (mkdir(SIDELOAD_TEMP_DIR, 0700) != 0) {
     if (errno != EEXIST) {
-      LOGE("Can't mkdir %s (%s)\n", SIDELOAD_TEMP_DIR, strerror(errno));
+      LOGE("copy_sideloaded_package: failed to mkdir: \"%s\" (%s)\n", SIDELOAD_TEMP_DIR, strerror(errno));
       return NULL;
     }
   }
@@ -358,19 +358,19 @@ static char* copy_sideloaded_package(const char* original_path)
   // directory, owned by root, readable and writable only by root.
   struct stat st;
   if (stat(SIDELOAD_TEMP_DIR, &st) != 0) {
-    LOGE("failed to stat %s (%s)\n", SIDELOAD_TEMP_DIR, strerror(errno));
+    LOGE("copy_sideloaded_package: failed to stat: \"%s\" (%s)\n", SIDELOAD_TEMP_DIR, strerror(errno));
     return NULL;
   }
   if (!S_ISDIR(st.st_mode)) {
-    LOGE("%s isn't a directory\n", SIDELOAD_TEMP_DIR);
+    LOGE("copy_sideloaded_package: \"%s\" isn't a directory\n", SIDELOAD_TEMP_DIR);
     return NULL;
   }
   if ((st.st_mode & 0777) != 0700) {
-    LOGE("%s has perms %o\n", SIDELOAD_TEMP_DIR, st.st_mode);
+    LOGE("copy_sideloaded_package: \"%s\" has perms \"%o\"\n", SIDELOAD_TEMP_DIR, st.st_mode);
     return NULL;
   }
   if (st.st_uid != 0) {
-    LOGE("%s owned by %lu; not root\n", SIDELOAD_TEMP_DIR, st.st_uid);
+    LOGE("copy_sideloaded_package: \"%s\" owned by \"%lu\"; not root\n", SIDELOAD_TEMP_DIR, st.st_uid);
     return NULL;
   }
 
@@ -380,25 +380,25 @@ static char* copy_sideloaded_package(const char* original_path)
 
   char* buffer = malloc(BUFSIZ);
   if (buffer == NULL) {
-    LOGE("Failed to allocate buffer\n");
+    LOGE("copy_sideloaded_package: failed to allocate memory\n");
     return NULL;
   }
 
   size_t read;
   FILE* fin = fopen(original_path, "rb");
   if (fin == NULL) {
-    LOGE("Failed to open %s (%s)\n", original_path, strerror(errno));
+    LOGE("copy_sideloaded_package: failed to open: \"%s\" (%s)\n", original_path, strerror(errno));
     return NULL;
   }
   FILE* fout = fopen(copy_path, "wb");
   if (fout == NULL) {
-    LOGE("Failed to open %s (%s)\n", copy_path, strerror(errno));
+    LOGE("copy_sideloaded_package: failed to open: \"%s\" (%s)\n", copy_path, strerror(errno));
     return NULL;
   }
 
   while ((read = fread(buffer, 1, BUFSIZ, fin)) > 0) {
     if (fwrite(buffer, 1, read, fout) != read) {
-      LOGE("Short write of %s (%s)\n", copy_path, strerror(errno));
+      LOGE("copy_sideloaded_package: short write on: \"%s\" (%s)\n", copy_path, strerror(errno));
       return NULL;
     }
   }
@@ -406,19 +406,19 @@ static char* copy_sideloaded_package(const char* original_path)
   free(buffer);
 
   if (fclose(fout) != 0) {
-    LOGE("Failed to close %s (%s)\n", copy_path, strerror(errno));
+    LOGE("copy_sideloaded_package: failed to close: \"%s\" (%s)\n", copy_path, strerror(errno));
     return NULL;
   }
 
   if (fclose(fin) != 0) {
-    LOGE("Failed to close %s (%s)\n", original_path, strerror(errno));
+    LOGE("copy_sideloaded_package: failed to close: \"%s\" (%s)\n", original_path, strerror(errno));
     return NULL;
   }
 
   // "adb push" is happy to overwrite read-only files when it's
   // running as root, but we'll try anyway.
   if (chmod(copy_path, 0400) != 0) {
-    LOGE("Failed to chmod %s (%s)\n", copy_path, strerror(errno));
+    LOGE("copy_sideloaded_package: failed to chmod: \"%s\" (%s)\n", copy_path, strerror(errno));
     return NULL;
   }
 
@@ -536,7 +536,7 @@ static int sdcard_directory(const char* path)
     struct dirent* de;
     d = opendir(path);
     if (d == NULL) {
-        LOGE("error opening %s: %s\n", path, strerror(errno));
+        LOGE("sdcard_directory: error opening: \"%s\" (%s)\n", path, strerror(errno));
         ensure_path_unmounted(SDCARD_ROOT);
         return 0;
     }
@@ -809,7 +809,7 @@ int main(int argc, char **argv)
     ui_print(EXPAND(RECOVERY_VERSION)"\n");
     load_volume_table();
     process_volumes();
-    LOGI("Processing arguments.\n");
+    LOGI("main: processing arguments.\n");
     get_args(&argc, &argv);
 
     int previous_runs = 0;
@@ -820,7 +820,6 @@ int main(int argc, char **argv)
     int toggle_secure_fs = 0;
     encrypted_fs_info encrypted_fs_data;
 
-    LOGI("Checking arguments.\n");
     int arg;
     while ((arg = getopt_long(argc, argv, "", OPTIONS, NULL)) != -1) {
         switch (arg) {
@@ -832,15 +831,15 @@ int main(int argc, char **argv)
         case 'e': encrypted_fs_mode = optarg; toggle_secure_fs = 1; break;
         case 't': ui_show_text(1); break;
         case '?':
-            LOGE("Invalid command argument\n");
+            LOGE("main: invalid command argument: -%s\n", arg);
             continue;
         }
     }
 
-    LOGI("device_recovery_start()\n");
+    LOGI("main: beginning device recovery\n");
     device_recovery_start();
 
-    printf("Command:");
+    printf("command:");
     for (arg = 0; arg < argc; arg++) {
         printf(" \"%s\"", argv[arg]);
     }
@@ -915,7 +914,7 @@ int main(int argc, char **argv)
         if (wipe_cache && erase_volume("/cache")) status = INSTALL_ERROR;
         if (status != INSTALL_SUCCESS) ui_print("Cache wipe failed.\n");
     } else {
-        LOGI("Checking for extendedcommand...\n");
+        LOGI("main: checking for extendedcommand...\n");
         status = INSTALL_ERROR;  // No command specified
         // we are starting up in user initiated recovery here
         // let's set up some default options
@@ -926,7 +925,7 @@ int main(int argc, char **argv)
         ui_set_background(BACKGROUND_ICON_CLOCKWORK);
         
         if (extendedcommand_file_exists()) {
-            LOGI("Running extendedcommand...\n");
+            LOGI("main: running extendedcommand...\n");
             int ret;
             if (0 == (ret = run_and_remove_extendedcommand())) {
                 status = INSTALL_SUCCESS;
@@ -936,7 +935,7 @@ int main(int argc, char **argv)
                 handle_failure(ret);
             }
         } else {
-            LOGI("Skipping execution of extendedcommand, file not found...\n");
+            LOGI("main: skipping execution of extendedcommand, file not found...\n");
         }
     }
 

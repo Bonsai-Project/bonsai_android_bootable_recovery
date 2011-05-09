@@ -205,7 +205,7 @@ char** gather_files(const char* directory, const char* fileExtensionOrDirectory,
     }
 
     if(closedir(dir) < 0) {
-        LOGE("Failed to close directory.");
+        LOGE("gather_files: failed to close directory: \"%s\"\n", directory);
     }
 
     if (total==0) {
@@ -299,11 +299,11 @@ char* choose_file_menu(const char* directory, const char* fileExtensionOrDirecto
 void show_choose_zip_menu()
 {
     if (ensure_path_mounted("/mnt/sdcard") != 0) {
-        LOGE ("Can't mount /mnt/sdcard\n");
+        LOGE ("show_choose_zip_menu: failed to mount: /mnt/sdcard\n");
         return;
     }
 
-    static const char* headers[] = {  "Choose a zip to apply",
+    static const char* headers[] = {  "Choose a .zip file to apply",
                                 "",
                                 NULL
     };
@@ -321,7 +321,7 @@ void show_choose_zip_menu()
 void show_nandroid_restore_menu()
 {
     if (ensure_path_mounted("/mnt/sdcard") != 0) {
-        LOGE ("Can't mount /mnt/sdcard\n");
+        LOGE ("show_nandroid_restore_menu: failed to mount: /mnt/sdcard\n");
         return;
     }
 
@@ -347,13 +347,13 @@ int show_mount_usb_storage_menu()
     int fd;
     Volume *vol = volume_for_path("/mnt/sdcard");
     if ((fd = open(BOARD_UMS_LUNFILE, O_WRONLY)) < 0) {
-        LOGE("Unable to open ums lunfile (%s)", strerror(errno));
+        LOGE("show_mount_usb_storage_menu: failed to open ums lunfile: (%s)\n", strerror(errno));
         return -1;
     }
 
     if ((write(fd, vol->device, strlen(vol->device)) < 0) &&
         (!vol->device2 || (write(fd, vol->device, strlen(vol->device2)) < 0))) {
-        LOGE("Unable to write to ums lunfile (%s)", strerror(errno));
+        LOGE("show_mount_usb_storage_menu: failed to write to ums lunfile: (%s)\n", strerror(errno));
         close(fd);
         return -1;
     }
@@ -374,13 +374,13 @@ int show_mount_usb_storage_menu()
     }
 
     if ((fd = open(BOARD_UMS_LUNFILE, O_WRONLY)) < 0) {
-        LOGE("Unable to open ums lunfile (%s)", strerror(errno));
+        LOGE("show_mount_usb_storage_menu: failed to open ums lunfile: (%s)\n", strerror(errno));
         return -1;
     }
 
     char ch = 0;
     if (write(fd, &ch, 1) < 0) {
-        LOGE("Unable to write to ums lunfile (%s)", strerror(errno));
+        LOGE("show_mount_usb_storage_menu: failed to write to ums lunfile: (%s)\n", strerror(errno));
         close(fd);
         return -1;
     }
@@ -390,26 +390,32 @@ int show_mount_usb_storage_menu()
 
 int confirm_selection(const char* title, const char* confirm)
 {
-    struct stat info;
-    if (0 == stat("/mnt/sdcard/clockworkmod/.no_confirm", &info))
-        return 1;
+    struct stat info; 
 
-    const char* confirm_headers[]  = {  title, "  THIS CAN NOT BE UNDONE.", "", NULL };
-    char* items[] = { "No",
-                      "No",
-                      "No",
-                      "No",
-                      "No",
-                      "No",
-                      "No",
-                      "Confirm",
-                      "No",
-                      "No",
-                      "No",
-                      NULL };
+	/* if /mnt/sdcard is not mounted, then we need to check */
+	/* for .no_confirm and return to the caller, unmounted */
+	if (!is_path_mounted("/mnt/sdcard")) {
+		ensure_path_mounted("/mnt/sdcard");
+		if (0 == stat("/mnt/sdcard/clockworkmod/.no_confirm", &info)) {
+			if (ensure_path_unmounted("/mnt/sdcard") != 0) {
+				LOGE("confirm_selection: failed to unmount: /mnt/sdcard\n");
+				return -12;
+			}
+			return 1;
+		}
+	} else {
+		if (0 == stat("/mnt/sdcard/clockworkmod/.no_confirm", &info))
+			return 1;
+	}
 
-    int chosen_item = get_menu_selection(confirm_headers, items, 0, 0);
-    return chosen_item == 7;
+	const char* confirm_headers[]  = {  title, "  THIS CAN NOT BE UNDONE.", "", NULL };
+	const char* items[] = {	"No",
+							confirm,
+							"No",
+							NULL };
+
+	int chosen_item = get_menu_selection(confirm_headers, (char *)items, 0, 0);
+	return chosen_item == 7;
 }
 
 #define MKE2FS_BIN      "/sbin/mke2fs"
@@ -418,7 +424,7 @@ int confirm_selection(const char* title, const char* confirm)
 
 int format_unknown_device(const char *device, const char* path, const char *fs_type)
 {
-    LOGI("Formatting unknown device.\n");
+    LOGI("format_unknown_device: formatting: \"%s\"\n", path);
 
     // device may simply be a name, like "system"
     if (device[0] != '/')
@@ -438,18 +444,18 @@ int format_unknown_device(const char *device, const char* path, const char *fs_t
 
     if (NULL != fs_type) {
         if (strcmp("ext3", fs_type) == 0) {
-            LOGI("Formatting ext3 device.\n");
+            LOGI("format_unknown_device: formatting ext3 device: \"%s\"\n", path);
             if (0 != ensure_path_unmounted(path)) {
-                LOGE("Error while unmounting %s.\n", path);
+                LOGE("format_unknown_device: failed to unmount: \"%s\"\n", path);
                 return -12;
             }
             return format_ext3_device(device);
         }
 
         if (strcmp("ext2", fs_type) == 0) {
-            LOGI("Formatting ext2 device.\n");
+            LOGI("format_unknown_device: formatting ext2 device: \"%s\"\n", path);
             if (0 != ensure_path_unmounted(path)) {
-                LOGE("Error while unmounting %s.\n", path);
+                LOGE("format_unknown_device: failed to unmount: \"%s\"\n", path);
                 return -12;
             }
             return format_ext2_device(device);
@@ -676,8 +682,7 @@ int run_script(char* filename)
     // supposedly not necessary, but let's be safe.
     script_data[script_len] = '\0';
     fclose(file);
-    LOGI("Running script:\n");
-    LOGI("\n%s\n", script_data);
+    LOGI("run_script: \"%s\"\n", script_data);
 
     int ret = run_script_from_buffer(script_data, script_len, filename);
     free(script_data);
@@ -701,7 +706,7 @@ int run_and_remove_extendedcommand()
     }
     remove("/mnt/sdcard/clockworkmod/.recoverycheckpoint");
     if (i == 0) {
-        ui_print("Timed out waiting for SD card... continuing anyways.");
+        ui_print("Timed out waiting for SD card... continuing.");
     }
 
     sprintf(tmp, "/tmp/%s", basename(EXTENDEDCOMMAND_SCRIPT));
@@ -711,15 +716,14 @@ int run_and_remove_extendedcommand()
 void show_nandroid_advanced_restore_menu()
 {
     if (ensure_path_mounted("/mnt/sdcard") != 0) {
-        LOGE ("Can't mount /mnt/sdcard\n");
+        LOGE ("show_nandroid_advanced_restore_menu: failed to mount: \"/mnt/sdcard\"\n");
         return;
     }
 
     static const char* advancedheaders[] = {  "Choose an image to restore",
                                 "",
-                                "Choose an image to restore",
-                                "first. The next menu will",
-                                "you more options.",
+                                "First, choose the date of the backup to restore.",
+                                "The next menu will provide partition restore options.",
                                 "",
                                 NULL
     };
@@ -940,12 +944,14 @@ void show_advanced_menu()
                 sddevice[strlen("/dev/block/mmcblkX")] = '\0';
                 char cmd[PATH_MAX];
                 setenv("SDPATH", sddevice, 1);
-                sprintf(cmd, "/sbin/sdparted -es %s -ss %s -efs ext3 -s", ext_sizes[ext_size], swap_sizes[swap_size]);
+                sprintf(cmd, "/sbin/sdparted -es %s -ss %s -efs ext3 -s",
+						ext_sizes[ext_size], swap_sizes[swap_size]);
                 ui_print("Partitioning SD Card... please wait...\n");
                 if (0 == __system(cmd))
                     ui_print("Done!\n");
                 else
-                    ui_print("An error occured while partitioning your SD Card. Please see /tmp/recovery.log for more details.\n");
+                    ui_print("An error occured while partitioning your SD Card.\n");
+					ui_print("Please see /tmp/recovery.log for more details.\n");
                 break;
             }
             case 6:
@@ -992,12 +998,14 @@ void show_advanced_menu()
                 sddevice[strlen("/dev/block/mmcblkX")] = '\0';
                 char cmd[PATH_MAX];
                 setenv("SDPATH", sddevice, 1);
-                sprintf(cmd, "/sbin/sdparted -es %s -ss %s -efs ext3 -s", ext_sizes[ext_size], swap_sizes[swap_size]);
+                sprintf(cmd, "/sbin/sdparted -es %s -ss %s -efs ext3 -s",
+						ext_sizes[ext_size], swap_sizes[swap_size]);
                 ui_print("Partitioning Internal SD Card... please wait...\n");
                 if (0 == __system(cmd))
                     ui_print("Done!\n");
                 else
-                    ui_print("An error occured while partitioning your Internal SD Card. Please see /tmp/recovery.log for more details.\n");
+                    ui_print("An error occured while partitioning your Internal SD Card.\n");
+					ui_print("Please see /tmp/recovery.log for more details.\n");
                 break;
             }
         }
@@ -1030,12 +1038,14 @@ void create_fstab()
     __system("touch /etc/mtab");
     FILE *file = fopen("/etc/fstab", "w");
     if (file == NULL) {
-        LOGW("Unable to create /etc/fstab!\n");
+        LOGW("failed to create /etc/fstab!\n");
         return;
     }
+#if defined (USE_BOOT)
     Volume *vol = volume_for_path("/boot");
     if (NULL != vol && strcmp(vol->fs_type, "mtd") != 0 && strcmp(vol->fs_type, "emmc") != 0 && strcmp(vol->fs_type, "bml") != 0)
          write_fstab_root("/boot", file);
+#endif
     write_fstab_root("/cache", file);
     write_fstab_root("/data", file);
     if (has_datadata()) {
@@ -1045,7 +1055,7 @@ void create_fstab()
     write_fstab_root("/mnt/sdcard", file);
     write_fstab_root("/mnt/sd-ext", file);
     fclose(file);
-    LOGI("Completed outputting fstab.\n");
+    LOGI("create_fstab: creation of /etc/fstab complete.\n");
 }
 
 int bml_check_volume(const char *path) {
@@ -1058,7 +1068,7 @@ int bml_check_volume(const char *path) {
     
     Volume *vol = volume_for_path(path);
     if (vol == NULL) {
-        LOGE("Unable process volume! Skipping...\n");
+        LOGE("bml_check_volume: failed to process volume: \"%s\" Skipping...\n", path);
         return 0;
     }
     
@@ -1120,7 +1130,8 @@ void handle_failure(int ret)
         return;
     mkdir("/mnt/sdcard/clockworkmod", S_IRWXU);
     __system("cp /tmp/recovery.log /mnt/sdcard/clockworkmod/recovery.log");
-    ui_print("/tmp/recovery.log was copied to /mnt/sdcard/clockworkmod/recovery.log. Please open ROM Manager to report the issue.\n");
+    ui_print("/tmp/recovery.log was copied to /mnt/sdcard/clockworkmod/recovery.log.\n");
+	ui_print("Please open ROM Manager to report the issue.\n");
 }
 
 int is_path_mounted(const char* path) {
@@ -1136,7 +1147,7 @@ int is_path_mounted(const char* path) {
     int result;
     result = scan_mounted_volumes();
     if (result < 0) {
-        LOGE("failed to scan mounted volumes\n");
+        LOGE("is_path_mounted: failed to scan mounted volumes.\n");
         return 0;
     }
 

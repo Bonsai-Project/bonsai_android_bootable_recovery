@@ -37,7 +37,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
 
     FILE* f = fopen(path, "rb");
     if (f == NULL) {
-        LOGE("failed to open %s (%s)\n", path, strerror(errno));
+        LOGE("verify_file: failed to open \"%s\" (%s)\n", path, strerror(errno));
         return VERIFY_FAILURE;
     }
 
@@ -53,14 +53,14 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
 #define FOOTER_SIZE 6
 
     if (fseek(f, -FOOTER_SIZE, SEEK_END) != 0) {
-        LOGE("failed to seek in %s (%s)\n", path, strerror(errno));
+        LOGE("verify_file: failed to seek in \"%s\" (%s)\n", path, strerror(errno));
         fclose(f);
         return VERIFY_FAILURE;
     }
 
     unsigned char footer[FOOTER_SIZE];
     if (fread(footer, 1, FOOTER_SIZE, f) != FOOTER_SIZE) {
-        LOGE("failed to read footer from %s (%s)\n", path, strerror(errno));
+        LOGE("verify_file: failed to read footer from \"%s\" (%s)\n", path, strerror(errno));
         fclose(f);
         return VERIFY_FAILURE;
     }
@@ -72,12 +72,12 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
 
     int comment_size = footer[4] + (footer[5] << 8);
     int signature_start = footer[0] + (footer[1] << 8);
-    LOGI("comment is %d bytes; signature %d bytes from end\n",
+    LOGI("verify_file: comment is %d bytes; signature %d bytes from end\n",
          comment_size, signature_start);
 
     if (signature_start - FOOTER_SIZE < RSANUMBYTES) {
         // "signature" block isn't big enough to contain an RSA block.
-        LOGE("signature is too short\n");
+        LOGE("verify_file: signature is too short\n");
         fclose(f);
         return VERIFY_FAILURE;
     }
@@ -89,7 +89,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
     size_t eocd_size = comment_size + EOCD_HEADER_SIZE;
 
     if (fseek(f, -eocd_size, SEEK_END) != 0) {
-        LOGE("failed to seek in %s (%s)\n", path, strerror(errno));
+        LOGE("verify_file: failed to seek in \"%s\" (%s)\n", path, strerror(errno));
         fclose(f);
         return VERIFY_FAILURE;
     }
@@ -102,12 +102,12 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
 
     unsigned char* eocd = malloc(eocd_size);
     if (eocd == NULL) {
-        LOGE("malloc for EOCD record failed\n");
+        LOGE("verify_file: malloc for EOCD record failed\n");
         fclose(f);
         return VERIFY_FAILURE;
     }
     if (fread(eocd, 1, eocd_size, f) != eocd_size) {
-        LOGE("failed to read eocd from %s (%s)\n", path, strerror(errno));
+        LOGE("verify_file: failed to read eocd from \"%s\" (%s)\n", path, strerror(errno));
         fclose(f);
         return VERIFY_FAILURE;
     }
@@ -116,7 +116,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
     // magic number $50 $4b $05 $06.
     if (eocd[0] != 0x50 || eocd[1] != 0x4b ||
         eocd[2] != 0x05 || eocd[3] != 0x06) {
-        LOGE("signature length doesn't match EOCD marker\n");
+        LOGE("verify_file: signature length doesn't match EOCD marker\n");
         fclose(f);
         return VERIFY_FAILURE;
     }
@@ -129,7 +129,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
             // the real one, minzip will find the later (wrong) one,
             // which could be exploitable.  Fail verification if
             // this sequence occurs anywhere after the real one.
-            LOGE("EOCD marker occurs after start of EOCD\n");
+            LOGE("verify_file: EOCD marker occurs after start of EOCD\n");
             fclose(f);
             return VERIFY_FAILURE;
         }
@@ -141,7 +141,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
     SHA_init(&ctx);
     unsigned char* buffer = malloc(BUFFER_SIZE);
     if (buffer == NULL) {
-        LOGE("failed to alloc memory for sha1 buffer\n");
+        LOGE("verify_file: failed to alloc memory for sha1 buffer\n");
         fclose(f);
         return VERIFY_FAILURE;
     }
@@ -153,7 +153,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
         size_t size = BUFFER_SIZE;
         if (signed_len - so_far < size) size = signed_len - so_far;
         if (fread(buffer, 1, size, f) != size) {
-            LOGE("failed to read data from %s (%s)\n", path, strerror(errno));
+            LOGE("verify_file: failed to read data from \"%s\" (%s)\n", path, strerror(errno));
             fclose(f);
             return VERIFY_FAILURE;
         }
@@ -174,12 +174,12 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
         // the signing tool appends after the signature itself.
         if (RSA_verify(pKeys+i, eocd + eocd_size - 6 - RSANUMBYTES,
                        RSANUMBYTES, sha1)) {
-            LOGI("whole-file signature verified\n");
+            LOGI("verify_file: whole-file signature verified\n");
             free(eocd);
             return VERIFY_SUCCESS;
         }
     }
     free(eocd);
-    LOGE("failed to verify whole-file signature\n");
+    LOGE("verify_file: failed to verify whole-file signature\n");
     return VERIFY_FAILURE;
 }

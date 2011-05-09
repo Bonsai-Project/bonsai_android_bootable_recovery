@@ -165,7 +165,7 @@ static void draw_text_line(int row, const char* t) {
   }
 }
 
-#define MENU_TEXT_COLOR 0, 120, 0, 255
+#define MENU_TEXT_COLOR 244, 237, 46, 255
 #define NORMAL_TEXT_COLOR 200, 200, 200, 255
 #define HEADER_TEXT_COLOR NORMAL_TEXT_COLOR
 
@@ -203,7 +203,7 @@ static void draw_screen_locked(void)
             gr_color(MENU_TEXT_COLOR);
             for (i = menu_show_start + menu_top; i < (menu_show_start + menu_top + j); ++i) {
                 if (i == menu_top + menu_sel) {
-                    gr_color(255, 255, 255, 0);
+                    gr_color(0, 0, 0, 0);
                     draw_text_line(i - menu_show_start , menu[i]);
                     gr_color(MENU_TEXT_COLOR);
                 } else {
@@ -363,9 +363,9 @@ void ui_init(void)
         int result = res_create_surface(BITMAPS[i].name, BITMAPS[i].surface);
         if (result < 0) {
             if (result == -2) {
-                LOGI("Bitmap %s missing header\n", BITMAPS[i].name);
+                LOGI("ui_init: bitmap \"%s\" missing header\n", BITMAPS[i].name);
             } else {
-                LOGE("Missing bitmap %s\n(Code %d)\n", BITMAPS[i].name, result);
+                LOGE("ui_init: missing bitmap \"%s\"\n(code %d)\n", BITMAPS[i].name, result);
             }
             *BITMAPS[i].surface = NULL;
         }
@@ -385,7 +385,7 @@ char *ui_copy_image(int icon, int *width, int *height, int *bpp) {
     int size = *width * *height * sizeof(gr_pixel);
     char *ret = malloc(size);
     if (ret == NULL) {
-        LOGE("Can't allocate %d bytes for image\n", size);
+        LOGE("ui_copy_image: can't allocate %d bytes for image\n", size);
     } else {
         memcpy(ret, gr_fb_data(), size);
     }
